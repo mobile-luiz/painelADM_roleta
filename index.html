@@ -170,6 +170,7 @@
             <tbody id="winnersBody"></tbody>
           </table>
         </div>
+        <div id="winnersPager" class="pager"></div>
       </section>
       </div>
 
@@ -190,6 +191,7 @@
               <button id="exportPartCsv" class="btn btn-light" type="button">Baixar planilha (CSV)</button>
             </div>
           </div>
+          <div id="girosAviso" class="alert hidden">⚠️ <b>Os giros não aparecem porque as regras do banco ainda não liberam o <code>roleta_giros</code>.</b> Atualize as regras do Realtime Database com o arquivo <b>regras-realtime-database.json</b>. A lista de participantes e os prêmios continuam funcionando.</div>
           <p class="hint">Cada linha é uma participação (cadastro). A mesma pessoa pode aparecer mais de uma vez se participou de novo.</p>
           <div class="table-wrap">
             <table class="winners parts">
@@ -202,6 +204,7 @@
               <tbody id="partsBody"></tbody>
             </table>
           </div>
+          <div id="partsPager" class="pager"></div>
         </section>
       </div>
     </main>

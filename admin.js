@@ -200,11 +200,11 @@ function stopDayListeners() {
   listeners.forEach(({ ref, cb }) => ref.off("value", cb));
   listeners = [];
 }
-function listen(ref, cb) {
+// Cada parte do painel trata o próprio erro: um erro nos giros não apaga os ganhadores.
+function listen(ref, cb, onError) {
   const handler = ref.on("value", cb, (err) => {
     console.error(err);
-    setMsg($("quotaMsg"), errText(err, "Não foi possível ler os dados."), "err");
-    $("winnersBody").innerHTML = `<tr><td colspan="9" class="empty">${escapeHtml(errText(err, "Não foi possível ler os dados."))}</td></tr>`;
+    if (onError) onError(err);
   });
   listeners.push({ ref, cb: handler });
 }
@@ -242,6 +242,8 @@ function goToDay(key) {
   document.querySelectorAll(".sched-item").forEach((b) => b.classList.toggle("current", b.dataset.day === key));
 
   stopDayListeners();
+  pages.winners.page = 1;
+  pages.parts.page = 1;
   summary = { cota: null, premios: [], participantes: null, giros: null, entradas: [], girosPorParticipante: {} };
   let firstQuota = true;
   $("winnersBody").innerHTML = `<tr><td colspan="9" class="empty">Carregando…</td></tr>`;
@@ -261,7 +263,7 @@ function goToDay(key) {
     } : null;
     if (firstQuota) { fillQuotaForm(); firstQuota = false; } else { updateQuotaRows(); }
     renderKpis();
-  });
+  }, (err) => setMsg($("quotaMsg"), errText(err, "Não foi possível ler as cotas."), "err"));
 
   // Ganhadores do dia
   listen(rtdb.ref("premios").orderByChild("createdAtMs").startAt(start).endAt(end - 1), (snap) => {
@@ -272,6 +274,9 @@ function goToDay(key) {
     renderWinners();
     renderParticipants();
     renderKpis();
+  }, (err) => {
+    $("winnersBody").innerHTML = `<tr><td colspan="9" class="empty">${escapeHtml(errText(err, "Não foi possível ler os ganhadores."))}</td></tr>`;
+    $("winnersPager").innerHTML = "";
   });
 
   // Participantes do dia
@@ -293,6 +298,9 @@ function goToDay(key) {
     summary.participantes = list.length;
     renderKpis();
     renderParticipants();
+  }, (err) => {
+    $("partsBody").innerHTML = `<tr><td colspan="7" class="empty">${escapeHtml(errText(err, "Não foi possível ler os participantes."))}</td></tr>`;
+    $("partsPager").innerHTML = "";
   });
 
   // Giros de cada participante (gravado pelo servidor a cada giro)
@@ -301,6 +309,10 @@ function goToDay(key) {
     const map = {};
     snap.forEach((child) => { map[child.key] = child.val() || {}; });
     summary.girosPorParticipante = map;
+    summary.girosSemPermissao = false;
+    renderParticipants();
+  }, () => {
+    summary.girosSemPermissao = true;
     renderParticipants();
   });
 
@@ -309,7 +321,7 @@ function goToDay(key) {
     if (key !== currentDay) return;
     summary.giros = Number(snap.val() || 0);
     renderKpis();
-  });
+  }, () => {});
 }
 
 function renderKpis() {
@@ -324,6 +336,53 @@ function renderKpis() {
   } else {
     $("kpiLeft").textContent = s.cota ? "Desativada" : "Sem cota";
   }
+}
+
+
+// ---------- Paginação ----------
+const pages = {
+  winners: { page: 1, size: 20 },
+  parts: { page: 1, size: 20 }
+};
+function pageSlice(list, st) {
+  const totalPages = Math.max(1, Math.ceil(list.length / st.size));
+  if (st.page > totalPages) st.page = totalPages;   // lista diminuiu (filtro/atualização ao vivo)
+  if (st.page < 1) st.page = 1;
+  const start = (st.page - 1) * st.size;
+  return { items: list.slice(start, start + st.size), totalPages, start };
+}
+function renderPager(elId, st, total, totalPages, start, rerender) {
+  const el = $(elId);
+  if (!total) { el.innerHTML = ""; return; }
+  const end = Math.min(total, start + st.size);
+  // números: 1 … (atual-1) atual (atual+1) … última
+  const nums = [];
+  for (let n = 1; n <= totalPages; n++) {
+    if (n === 1 || n === totalPages || Math.abs(n - st.page) <= 1) nums.push(n);
+    else if (nums[nums.length - 1] !== "…") nums.push("…");
+  }
+  el.innerHTML = `
+    <span class="pager-info">Mostrando <b>${start + 1}–${end}</b> de <b>${total}</b></span>
+    <span class="pager-controls">
+      <button class="pager-btn" type="button" data-go="${st.page - 1}" ${st.page <= 1 ? "disabled" : ""} aria-label="Página anterior">‹</button>
+      ${nums.map((n) => n === "…"
+        ? `<span class="pager-gap">…</span>`
+        : `<button class="pager-btn num ${n === st.page ? "current" : ""}" type="button" data-go="${n}" ${n === st.page ? 'aria-current="page"' : ""}>${n}</button>`).join("")}
+      <button class="pager-btn" type="button" data-go="${st.page + 1}" ${st.page >= totalPages ? "disabled" : ""} aria-label="Próxima página">›</button>
+      <select aria-label="Itens por página">
+        ${[10, 20, 50, 100].map((n) => `<option value="${n}" ${n === st.size ? "selected" : ""}>${n} por página</option>`).join("")}
+      </select>
+    </span>`;
+  el.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => {
+    st.page = Number(b.dataset.go);
+    rerender();
+    el.closest(".card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  el.querySelector("select").addEventListener("change", (e) => {
+    st.size = Number(e.target.value);
+    st.page = 1;
+    rerender();
+  });
 }
 
 // ---------- Ganhadores ----------
@@ -361,9 +420,12 @@ function renderWinners() {
   $("winnersCount").textContent = total ? `(${list.length}${list.length !== total ? ` de ${total}` : ""})` : "";
   if (!list.length) {
     $("winnersBody").innerHTML = `<tr><td colspan="9" class="empty">${total ? "Nenhum ganhador com esse filtro." : "Ninguém ganhou prêmio neste dia."}</td></tr>`;
+    $("winnersPager").innerHTML = "";
     return;
   }
-  $("winnersBody").innerHTML = list.map((p) => {
+  const pg = pageSlice(list, pages.winners);
+  renderPager("winnersPager", pages.winners, list.length, pg.totalPages, pg.start, renderWinners);
+  $("winnersBody").innerHTML = pg.items.map((p) => {
     const st = prizeStatus(p);
     const stTag = st === "cancelado" ? `<span class="tag cancel">Cancelado</span>` : st === "utilizado"
       ? `<span class="tag used">Utilizado</span>${p.utilizadoEmMs ? `<div class="empty nowrap">${fmtDay(p.utilizadoEmMs)}</div>` : ""}`
@@ -430,8 +492,8 @@ $("winnersBody").addEventListener("click", async (e) => {
   }
 });
 
-$("winnerSearch").addEventListener("input", renderWinners);
-$("winnerFilter").addEventListener("change", renderWinners);
+$("winnerSearch").addEventListener("input", () => { pages.winners.page = 1; renderWinners(); });
+$("winnerFilter").addEventListener("change", () => { pages.winners.page = 1; renderWinners(); });
 
 $("exportCsv").addEventListener("click", () => {
   const list = filteredWinners();
@@ -502,13 +564,17 @@ function filteredParticipants() {
 function renderParticipants() {
   const all = summary?.entradas || [];
   $("partTabCount").textContent = all.length || "";
+  $("girosAviso").classList.toggle("hidden", !summary?.girosSemPermissao);
   const list = filteredParticipants();
   $("partCount").textContent = all.length ? `(${list.length}${list.length !== all.length ? ` de ${all.length}` : ""})` : "";
   if (!list.length) {
     $("partsBody").innerHTML = `<tr><td colspan="7" class="empty">${all.length ? "Ninguém com esse filtro." : "Nenhum participante neste dia."}</td></tr>`;
+    $("partsPager").innerHTML = "";
     return;
   }
-  $("partsBody").innerHTML = list.map((r) => {
+  const pg = pageSlice(list, pages.parts);
+  renderPager("partsPager", pages.parts, list.length, pg.totalPages, pg.start, renderParticipants);
+  $("partsBody").innerHTML = pg.items.map((r) => {
     const phone = r.telefone.replace(/\D/g, "");
     const pct = Math.min(100, (r.giros / MAX_ROUNDS) * 100);
     const spins = `<div class="spins ${r.giros >= MAX_ROUNDS ? "done" : ""}">${r.giros} de ${MAX_ROUNDS}<span class="bar"><i style="width:${pct}%"></i></span></div>`;
@@ -529,8 +595,8 @@ function renderParticipants() {
     </tr>`;
   }).join("");
 }
-$("partSearch").addEventListener("input", renderParticipants);
-$("partFilter").addEventListener("change", renderParticipants);
+$("partSearch").addEventListener("input", () => { pages.parts.page = 1; renderParticipants(); });
+$("partFilter").addEventListener("change", () => { pages.parts.page = 1; renderParticipants(); });
 $("exportPartCsv").addEventListener("click", () => {
   const list = filteredParticipants();
   if (!list.length) { toast("Nada para exportar."); return; }
