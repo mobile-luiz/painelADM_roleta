@@ -1,5 +1,5 @@
-// Configuração do Firebase — PAD Saúde+
-// Projeto: inventario-f8794
+// Configuração do Firebase — Painel da Roleta PAD Saúde+
+// Projeto: roleta-d372c
 const firebaseConfig = {
   apiKey: "AIzaSyAwTRWdRi0X-O85bEM1r9d_jQPm6IWAs2k",
   authDomain: "roleta-d372c.firebaseapp.com",
