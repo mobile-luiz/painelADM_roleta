@@ -225,7 +225,9 @@ function normalizePrize(id, d) {
     validadeAteMs: Number(d.validadeAteMs) || (created ? created + (type === "gift" ? GIFT_VALID_DAYS : COUPON_VALID_DAYS) * DAY_MS : 0),
     utilizado: d.utilizado === true,
     utilizadoEmMs: Number(d.utilizadoEmMs || 0),
-    cancelado: d.cancelado === true
+    cancelado: d.cancelado === true,
+    participantId: d.participantId || "",
+    participationNumber: Number(d.participationNumber || 1)
   };
 }
 
@@ -240,7 +242,7 @@ function goToDay(key) {
   document.querySelectorAll(".sched-item").forEach((b) => b.classList.toggle("current", b.dataset.day === key));
 
   stopDayListeners();
-  summary = { cota: null, premios: [], participantes: null, giros: null };
+  summary = { cota: null, premios: [], participantes: null, giros: null, entradas: [], girosPorParticipante: {} };
   let firstQuota = true;
   $("winnersBody").innerHTML = `<tr><td colspan="9" class="empty">Carregando…</td></tr>`;
   renderKpis();
@@ -268,14 +270,38 @@ function goToDay(key) {
     snap.forEach((child) => { list.push(normalizePrize(child.key, child.val() || {})); });
     summary.premios = list.sort((a, b) => b.criadoEmMs - a.criadoEmMs);
     renderWinners();
+    renderParticipants();
     renderKpis();
   });
 
   // Participantes do dia
   listen(rtdb.ref("entradas").orderByChild("enteredAt").startAt(start).endAt(end - 1), (snap) => {
     if (key !== currentDay) return;
-    summary.participantes = snap.numChildren();
+    const list = [];
+    snap.forEach((child) => {
+      const v = child.val() || {};
+      list.push({
+        id: child.key,
+        nome: v.name || "",
+        telefone: String(v.phone || ""),
+        entrouEmMs: Number(v.enteredAt || 0),
+        participantId: v.participantId || "",
+        participationNumber: Number(v.participationNumber || 1)
+      });
+    });
+    summary.entradas = list.sort((a, b) => b.entrouEmMs - a.entrouEmMs);
+    summary.participantes = list.length;
     renderKpis();
+    renderParticipants();
+  });
+
+  // Giros de cada participante (gravado pelo servidor a cada giro)
+  listen(rtdb.ref("roleta_giros").orderByChild("dia").equalTo(key), (snap) => {
+    if (key !== currentDay) return;
+    const map = {};
+    snap.forEach((child) => { map[child.key] = child.val() || {}; });
+    summary.girosPorParticipante = map;
+    renderParticipants();
   });
 
   // Giros do dia
@@ -432,6 +458,114 @@ $("exportCsv").addEventListener("click", () => {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+
+// ---------- Participantes ----------
+const MAX_ROUNDS = 10;
+function prizeShort(p) {
+  return p.type === "gift" ? "🎁 Brinde" : p.type === "adesao" ? "💳 Adesão grátis" : `${p.valor}% OFF`;
+}
+function participantRows() {
+  const giros = summary?.girosPorParticipante || {};
+  const prizes = summary?.premios || [];
+  return (summary?.entradas || []).map((e) => {
+    const g = giros[`${e.participantId}_${e.participationNumber}`] || null;
+    const won = prizes.filter((p) => !p.cancelado && (
+      p.participantId
+        ? p.participantId === e.participantId && p.participationNumber === e.participationNumber
+        : p.telefone === e.telefone
+    ));
+    return {
+      ...e,
+      giros: g ? Number(g.giros || 0) : 0,
+      temRegistro: !!g,
+      ultimoResultado: g?.ultimoResultado || "",
+      ultimoGiroMs: Number(g?.ultimoGiroMs || 0),
+      premios: won
+    };
+  });
+}
+function filteredParticipants() {
+  const term = $("partSearch").value.trim().toLowerCase();
+  const digits = term.replace(/\D/g, "");
+  const filter = $("partFilter").value;
+  return participantRows().filter((r) => {
+    if (filter === "ganhou" && !r.premios.length) return false;
+    if (filter === "jogando" && !(r.giros > 0 && r.giros < MAX_ROUNDS)) return false;
+    if (filter === "terminou" && r.giros < MAX_ROUNDS) return false;
+    if (filter === "nao-girou" && r.giros > 0) return false;
+    if (!term) return true;
+    return r.nome.toLowerCase().includes(term) || (digits.length >= 3 && r.telefone.includes(digits));
+  });
+}
+function renderParticipants() {
+  const all = summary?.entradas || [];
+  $("partTabCount").textContent = all.length || "";
+  const list = filteredParticipants();
+  $("partCount").textContent = all.length ? `(${list.length}${list.length !== all.length ? ` de ${all.length}` : ""})` : "";
+  if (!list.length) {
+    $("partsBody").innerHTML = `<tr><td colspan="7" class="empty">${all.length ? "Ninguém com esse filtro." : "Nenhum participante neste dia."}</td></tr>`;
+    return;
+  }
+  $("partsBody").innerHTML = list.map((r) => {
+    const phone = r.telefone.replace(/\D/g, "");
+    const pct = Math.min(100, (r.giros / MAX_ROUNDS) * 100);
+    const spins = `<div class="spins ${r.giros >= MAX_ROUNDS ? "done" : ""}">${r.giros} de ${MAX_ROUNDS}<span class="bar"><i style="width:${pct}%"></i></span></div>`;
+    const prizes = r.premios.length
+      ? `<div class="prize-list">${r.premios.map((p) => `<span class="tag ${p.origem === "cota" ? "cota" : "fora"}" title="Rodada ${p.rodada}${p.cupom ? " · " + escapeHtml(p.cupom) : ""}">${prizeShort(p)}</span>`).join("")}</div>`
+      : `<span class="muted">—</span>`;
+    const last = r.ultimoResultado
+      ? `<span class="last">${escapeHtml(r.ultimoResultado)}</span><div class="muted">${fmtTime(r.ultimoGiroMs)}</div>`
+      : `<span class="muted">${r.giros ? "—" : "Ainda não girou"}</span>`;
+    return `<tr>
+      <td class="nowrap" data-label="Hora">${r.entrouEmMs ? fmtTime(r.entrouEmMs) : "—"}</td>
+      <td class="c-name" data-label="Nome">${escapeHtml(r.nome)}</td>
+      <td data-label="WhatsApp">${phone ? `<a href="https://wa.me/${phone}" target="_blank" rel="noopener">${escapeHtml(fmtPhone(phone))}</a>` : "—"}</td>
+      <td data-label="Participação">${r.participationNumber}ª</td>
+      <td data-label="Giros">${spins}</td>
+      <td data-label="Prêmios">${prizes}</td>
+      <td data-label="Último resultado">${last}</td>
+    </tr>`;
+  }).join("");
+}
+$("partSearch").addEventListener("input", renderParticipants);
+$("partFilter").addEventListener("change", renderParticipants);
+$("exportPartCsv").addEventListener("click", () => {
+  const list = filteredParticipants();
+  if (!list.length) { toast("Nada para exportar."); return; }
+  const head = ["Data", "Hora", "Nome", "WhatsApp", "Participação", "Giros", "Prêmios", "Último resultado"];
+  const rows = list.map((r) => [
+    r.entrouEmMs ? fmtDay(r.entrouEmMs) : "",
+    r.entrouEmMs ? fmtTime(r.entrouEmMs) : "",
+    r.nome,
+    fmtPhone(r.telefone),
+    r.participationNumber,
+    `${r.giros}/${MAX_ROUNDS}`,
+    r.premios.map((p) => prizeShort(p).replace(/^\S+ /, "") + (p.cupom ? ` (${p.cupom})` : "")).join(" | "),
+    r.ultimoResultado
+  ]);
+  const csv = [head, ...rows].map((row) => row.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `participantes-roleta-${currentDay}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+// ---------- Abas ----------
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => {
+      const on = t === tab;
+      t.classList.toggle("active", on);
+      t.setAttribute("aria-selected", String(on));
+      $(t.dataset.tab).classList.toggle("hidden", !on);
+    });
+  });
 });
 
 // ---------- Salvar cotas ----------

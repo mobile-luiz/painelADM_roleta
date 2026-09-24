@@ -1,0 +1,48 @@
+{
+  "rules": {
+    // ------------------------------------------------------------------
+    // APP DE INVENTÁRIO — continua aberto como está hoje, para não quebrar.
+    // (Se o Inventário já tinha regras próprias, mantenha as dele aqui.)
+    // ------------------------------------------------------------------
+    "inventario": { ".read": true, ".write": true },
+    "usuarios":   { ".read": true, ".write": true },
+
+    // ------------------------------------------------------------------
+    // ROLETA — só o administrador do painel lê/salva.
+    // O servidor (Cloud Functions) grava sem passar por estas regras.
+    // Para liberar outra pessoa, acrescente:  || auth.token.email == 'outro@email.com'
+    // ------------------------------------------------------------------
+    "roleta_cotas": {
+      ".read":  "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')"
+    },
+    "roleta_config": {
+      ".read":  "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')"
+    },
+    "roleta_stats": {
+      ".read":  "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')"
+    },
+    "roleta_giros": {
+      ".read":  "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')",
+      ".indexOn": ["dia"]
+    },
+    "entradas": {
+      ".read":  "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')",
+      ".indexOn": ["enteredAt"]
+    },
+    "premios": {
+      ".read":  "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')",
+      ".indexOn": ["createdAtMs", "phone"],
+      "$premioId": {
+        // o painel só pode mudar "utilizado" e "cancelado"
+        "utilizado":     { ".write": "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')", ".validate": "newData.isBoolean()" },
+        "utilizadoEmMs": { ".write": "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')" },
+        "utilizadoPor":  { ".write": "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')" },
+        "cancelado":     { ".write": "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')", ".validate": "newData.isBoolean()" },
+        "canceladoEmMs": { ".write": "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')" },
+        "canceladoPor":  { ".write": "auth != null && auth.token.firebase.sign_in_provider == 'password' && (auth.token.email == 'padroleta@gmail.com')" }
+      }
+    }
+  }
+}

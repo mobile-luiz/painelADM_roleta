@@ -66,6 +66,12 @@
         <div class="kpi"><span>Cotas restantes</span><strong id="kpiLeft">—</strong></div>
       </section>
 
+      <nav class="tabs" role="tablist" aria-label="Seções do painel">
+        <button class="tab active" type="button" role="tab" data-tab="tabResumo" aria-selected="true">🎯 Cotas e ganhadores</button>
+        <button class="tab" type="button" role="tab" data-tab="tabParticipantes" aria-selected="false">👥 Participantes <span id="partTabCount" class="tab-count"></span></button>
+      </nav>
+
+      <div id="tabResumo" role="tabpanel">
       <div class="grid">
         <!-- COTAS -->
         <section class="card">
@@ -165,6 +171,39 @@
           </table>
         </div>
       </section>
+      </div>
+
+      <!-- PARTICIPANTES -->
+      <div id="tabParticipantes" role="tabpanel" class="hidden">
+        <section class="card">
+          <div class="card-head wrap-head">
+            <h2>Participantes do dia <span id="partCount" class="count"></span></h2>
+            <div class="tools">
+              <input id="partSearch" type="search" placeholder="Buscar nome ou WhatsApp" aria-label="Buscar participante">
+              <select id="partFilter" aria-label="Filtrar participantes">
+                <option value="">Todos</option>
+                <option value="ganhou">Ganharam prêmio</option>
+                <option value="jogando">Ainda têm rodadas</option>
+                <option value="terminou">Usaram as 10 rodadas</option>
+                <option value="nao-girou">Não giraram</option>
+              </select>
+              <button id="exportPartCsv" class="btn btn-light" type="button">Baixar planilha (CSV)</button>
+            </div>
+          </div>
+          <p class="hint">Cada linha é uma participação (cadastro). A mesma pessoa pode aparecer mais de uma vez se participou de novo.</p>
+          <div class="table-wrap">
+            <table class="winners parts">
+              <thead>
+                <tr>
+                  <th>Hora</th><th>Nome</th><th>WhatsApp</th><th>Participação</th>
+                  <th>Giros</th><th>Prêmios</th><th>Último resultado</th>
+                </tr>
+              </thead>
+              <tbody id="partsBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </main>
   </div>
 
