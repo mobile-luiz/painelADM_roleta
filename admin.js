@@ -389,6 +389,9 @@ function renderPager(elId, st, total, totalPages, start, rerender) {
 const isOutsideQuota = (p) => p.origem !== "cota";
 
 function renderServerAlert() {
+  // Versão sem servidor: a roleta grava direto no banco, não existe "servidor antigo".
+  $("serverAlert").classList.add("hidden");
+  return;
   const s = summary || {};
   const oldPrizes = (s.premios || []).filter((p) => p.origem === "antigo");
   const noSpinsCounted = currentDay === todayKey && s.participantes > 0 && !s.giros;
@@ -716,7 +719,7 @@ function watchSchedule() {
 
 function watchConfig() {
   rtdb.ref("roleta_config/semCotaModo").once("value")
-    .then((snap) => { $("noQuotaMode").value = snap.val() || "nenhum"; })
+    .then((snap) => { if ($("noQuotaMode")) $("noQuotaMode").value = snap.val() || "nenhum"; })
     .catch((err) => setMsg($("configMsg"), errText(err, "Não foi possível ler a opção."), "err"));
 }
 
@@ -726,7 +729,7 @@ $("scheduleList").addEventListener("click", (e) => {
 });
 
 // ---------- Dias sem cota ----------
-$("saveConfig").addEventListener("click", async () => {
+if ($("saveConfig")) $("saveConfig").addEventListener("click", async () => {
   $("saveConfig").disabled = true;
   try {
     await rtdb.ref("roleta_config").update({
