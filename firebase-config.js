@@ -1,15 +1,14 @@
 // Configuração do Firebase — PAD Saúde+
 // Projeto: inventario-f8794
 const firebaseConfig = {
-  apiKey: "AIzaSyBNevFEEvg4E7LXBk_-LEq6dfTkBHlhhOw",
-  authDomain: "inventario-f8794.firebaseapp.com",
-  // Endereço do Realtime Database (Firebase Console > Realtime Database, no topo da aba "Dados")
-  databaseURL: "https://inventario-f8794-default-rtdb.firebaseio.com",
-  projectId: "inventario-f8794",
-  storageBucket: "inventario-f8794.firebasestorage.app",
-  messagingSenderId: "499180546382",
-  appId: "1:499180546382:web:dabed88a574ef77b0d161f",
-  measurementId: "G-3NKBHHRSWB"
+  apiKey: "AIzaSyAwTRWdRi0X-O85bEM1r9d_jQPm6IWAs2k",
+  authDomain: "roleta-d372c.firebaseapp.com",
+  databaseURL: "https://roleta-d372c-default-rtdb.firebaseio.com",
+  projectId: "roleta-d372c",
+  storageBucket: "roleta-d372c.firebasestorage.app",
+  messagingSenderId: "547280299466",
+  appId: "1:547280299466:web:72c3ed77e1fcb073799b33",
+  measurementId: "G-XX03T7JQVD"
 };
 
 firebase.initializeApp(firebaseConfig);
